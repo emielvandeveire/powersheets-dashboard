@@ -1,11 +1,332 @@
-<script setup></script>
+<script setup>
+import { ref } from 'vue'
+import SignIn from './components/SignIn.vue'
+import { useAuth } from './useAuth.js'
+import { signOut } from 'firebase/auth'
+import { auth } from './firebaseConfig'
+
+const { user } = useAuth();
+
+async function signOutUser() {
+    try {
+        await signOut(auth)
+        // useAuth onAuthStateChanged will update `user` to null
+    } catch (err) {
+        console.error('Sign out failed', err)
+        alert('Failed to sign out: ' + (err && err.message ? err.message : err))
+    }
+}
+
+async function findSheets() {
+    const url = "https://script.google.com/macros/s/AKfycbwF9QZCKDXY0VFW2Y9N-C0EcBJKIsHN6_27l0PG9zifKJ1ms1_A6FMRh51qphUfFhYIvA/exec";
+    const urlWithParam = `${url}?coachEmail=${encodeURIComponent(true ? "evdv3d@gmail.com" : user.value.email)}`;
+
+    const response = await fetch(urlWithParam);
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Request failed: ${response.status} ${text}`);
+    }
+
+    const result = await response.json().catch(() => null);
+    console.log('Sheets found: ' + JSON.stringify(result));
+
+    // add them to the sheets list
+    sheets.value = result.sheets || [];
+    sheets.value = sheets.value.filter(s => !s.name.toLowerCase().includes('template'));
+    templateSheet.value = result.sheets ? result.sheets.find(s => s.name.toLowerCase().includes('template')) : null;
+    return result;
+}
+
+// existing helper (kept for other debug/requests)
+// returns parsed JSON result or throws on error
+async function newSheet(athleteEmail, athleteName) {
+    const url = "https://script.google.com/macros/s/AKfycbwF9QZCKDXY0VFW2Y9N-C0EcBJKIsHN6_27l0PG9zifKJ1ms1_A6FMRh51qphUfFhYIvA/exec";
+    const data = {
+        coachEmail: "evdv3d@gmail.com",
+        athleteEmail: athleteEmail,
+        athleteName: athleteName,
+    };
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Request failed: ${response.status} ${text}`);
+    }
+
+    const result = await response.json().catch(() => null);
+    return result;
+}
+
+const templateSheet = ref(null);
+
+const sheets = ref([
+    // { id: 1, name: 'John Smith', url: 'https://example.com/sheet/1' },
+    // { id: 2, name: 'Steve Johnson', url: 'https://example.com/sheet/2' },
+    // { id: 3, name: 'Tim Lee', url: 'https://example.com/sheet/3' },
+])
+
+// Modal state and form fields for creating a new sheet
+const showModal = ref(false)
+const athleteEmail = ref('')
+const athleteName = ref('')
+
+function openModal() {
+    athleteEmail.value = ''
+    athleteName.value = ''
+    showModal.value = true
+}
+
+function closeModal() {
+    showModal.value = false
+}
+
+const isSaving = ref(false)
+
+async function saveNewSheet() {
+    // simple validation
+    if (!athleteName.value.trim() || !athleteEmail.value.trim()) {
+        alert('Please fill both fields')
+        return
+    }
+
+    if (isSaving.value) return
+
+    isSaving.value = true
+    try {
+        // call remote helper (may throw)
+        await newSheet(athleteEmail.value, athleteName.value)
+
+        // append to local list (demo behavior)
+        const nextId = sheets.value.length ? Math.max(...sheets.value.map(s => s.id)) + 1 : 1
+        sheets.value.push({ id: nextId, name: athleteName.value.trim(), link: '#new' })
+
+        closeModal()
+    } catch (err) {
+        // show error and keep modal open
+        alert('Failed to create sheet: ' + (err && err.message ? err.message : err))
+    } finally {
+        isSaving.value = false
+    }
+}
+
+findSheets();
+</script>
+
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <SignIn v-if="!user" />
+    <div v-else>
+        <div class="app">
+            <header class="navbar">
+                <!-- <div class="logo">PowerSheets</div> -->
+                <img src="./icons/powersheets.png" alt="" class="logo">
+                <div class="nav-actions">
+                    <!-- <div class="user-email" v-if="user">{{ user.email }}</div> -->
+                    <button class="btn ghost signout" v-if="user" @click="signOutUser">
+                        <span class="material-icons">logout</span>
+                        Sign out
+                    </button>
+                </div>
+            </header>
+            <main class="main">
+                <div class="main-header">
+                    <div>
+                        <h1>Welcome to the PowerSheets Dashboard</h1>
+                        <p class="demo">Here you can access all your coaching sheets.</p>
+                    </div>
+
+                    <div class="toolbar">
+                        <button class="btn new" @click="openModal">
+                            <span class="material-icons">add</span>
+                            New sheet
+                        </button>
+                    </div>
+                </div>
+
+                <h2>Template Sheet</h2>
+                <div class="sheets-wrap">
+                    <table class="sheets" aria-label="Demo sheets">
+                        <tbody>
+                            <tr>
+                            <td class="name">{{ templateSheet.name }}</td>
+                            <td class="link"><a :href="templateSheet.url" target="_blank" rel="noopener">Open</a></td>
+                            <td class="actions">
+                                <button class="icon" title="Edit sharing" @click.prevent>
+                                    <span class="material-icons">share</span>
+                                </button>
+                                <button class="icon" title="Delete sheet" @click.prevent>
+                                    <span class="material-icons">delete</span>
+                                </button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h2>Athlete Sheets</h2>
+                <section class="sheets-wrap">
+                    <table class="sheets" aria-label="Demo sheets">
+                        <thead>
+                            <tr>
+                                <th>Sheet name</th>
+                                <th>Sheet link</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+
+                            <tr v-if="sheets.length != 0" v-for="sheet in sheets" :key="sheet.id">
+                                <td class="name">{{ sheet.name }}</td>
+                                <td class="link"><a :href="sheet.url" target="_blank" rel="noopener">Open</a></td>
+                                <td class="actions">
+                                    <button class="icon" title="Edit sharing" @click.prevent>
+                                        <span class="material-icons">share</span>
+                                    </button>
+                                    <button class="icon" title="Delete sheet" @click.prevent>
+                                        <span class="material-icons">delete</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            <div v-else>
+                                Sheets are loading (or no sheets found)
+                            </div>
+                        </tbody>
+                    </table>
+                </section>
+                <!-- New sheet modal -->
+                <div v-if="showModal" class="modal-overlay" role="dialog" aria-modal="true">
+                    <div class="modal">
+                        <h2>New Sheet</h2>
+                        <p class="modal-sub">Create a new sheet for an athlete</p>
+
+                        <label class="field">
+                            <div class="field-label">Athlete email</div>
+                            <input type="email" v-model="athleteEmail" placeholder="athlete@example.com"
+                                :disabled="isSaving" />
+                        </label>
+
+                        <label class="field">
+                            <div class="field-label">Athlete name</div>
+                            <input type="text" v-model="athleteName" placeholder="Full name" :disabled="isSaving" />
+                        </label>
+
+                        <div class="modal-actions">
+                            <button class="btn ghost" @click="closeModal" :disabled="isSaving">Cancel</button>
+                            <button class="btn primary" disabled="{{ isSaving }}" @click="saveNewSheet"
+                                :disabled="isSaving">
+                                <span v-if="isSaving" class="spinner" aria-hidden="true"></span>
+                                <span v-if="isSaving">Creating...</span>
+                                <span v-else>Create</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
 </template>
 
-<style scoped></style>
+
+<style lang="scss">
+@import 'src/style.css';
+
+/* Modal styles */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+}
+
+.modal {
+    background: #060606;
+    color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    width: 420px;
+    max-width: calc(100% - 32px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.modal h2 {
+    margin: 0 0 6px 0;
+    font-size: 1.125rem;
+}
+
+.modal-sub {
+    margin: 0 0 12px 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+}
+
+.field {
+    display: block;
+    margin-bottom: 12px;
+}
+
+.field-label {
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.field input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+    color: #fff;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.btn.ghost {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.btn.primary {
+    background: #B91F27;
+    border: none;
+    padding: 8px 12px;
+    color: #fff;
+    border-radius: 8px;
+}
+
+/* spinner */
+.spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+</style>

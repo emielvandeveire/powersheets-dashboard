@@ -1,0 +1,131 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap");
+
+* {
+    font-family: "Plus Jakarta Sans";
+    box-sizing: border-box;
+}
+
+.app {
+    min-height: 100vh;
+    background: #000;
+    color: #fff;
+}
+
+.navbar {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nav-actions {
+    display:flex;
+    align-items: center;
+    gap: 10px;
+}
+
+img.logo {
+    /* font-weight: 700;
+    font-size: 1.125rem;
+    color: #fff; */
+    height: 20px;
+}
+
+.main {
+    padding: 20px;
+}
+
+.main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+h1 {
+    font-size: 1.25rem;
+    margin: 0 0 6px 0;
+}
+
+.demo {
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #B91F27;
+    color: #fff;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn .material-icons {
+    font-size: 18px;
+}
+
+.sheets-wrap {
+    overflow-x: auto;
+}
+
+.sheets {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 540px;
+}
+
+.sheets thead th {
+    text-align: left;
+    font-size: 0.875rem;
+    padding: 10px 12px;
+    color: rgba(255, 255, 255, 0.85);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.sheets th:last-child,
+.sheets td:last-child {
+    text-align: right;
+}
+
+.sheets tbody td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.sheets a {
+    color: #60a5fa;
+    text-decoration: none;
+}
+
+/* .actions {
+    width: 140px;
+} */
+
+.icon {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    padding: 6px;
+    margin-right: 6px;
+}
+
+.icon .material-icons {
+    font-size: 20px;
+}
+
+.icon:hover {
+    opacity: 0.9;
+}
