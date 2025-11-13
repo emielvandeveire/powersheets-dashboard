@@ -19,7 +19,7 @@ async function signOutUser() {
 
 async function findSheets() {
     const url = "https://script.google.com/macros/s/AKfycbwF9QZCKDXY0VFW2Y9N-C0EcBJKIsHN6_27l0PG9zifKJ1ms1_A6FMRh51qphUfFhYIvA/exec";
-    const urlWithParam = `${url}?coachEmail=${encodeURIComponent(true ? "evdv3d@gmail.com" : user.value.email)}`;
+    const urlWithParam = `${url}?coachEmail=${encodeURIComponent(user.value.email)}`;
 
     const response = await fetch(urlWithParam);
     if (!response.ok) {
