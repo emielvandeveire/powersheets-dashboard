@@ -2,10 +2,14 @@
 import { ref } from 'vue'
 import SignIn from './components/SignIn.vue'
 import { useAuth } from './useAuth.js'
-import { signOut } from 'firebase/auth'
+import { signOut, onAuthStateChanged } from 'firebase/auth'
 import { auth } from './firebaseConfig'
+import Loading from './Loading.vue'
 
 const { user } = useAuth();
+
+const loading = ref(true);
+
 
 async function signOutUser() {
     try {
@@ -102,9 +106,9 @@ async function saveNewSheet() {
         await newSheet(athleteEmail.value, athleteName.value)
 
         // append to local list (demo behavior)
-        const nextId = sheets.value.length ? Math.max(...sheets.value.map(s => s.id)) + 1 : 1
-        sheets.value.push({ id: nextId, name: athleteName.value.trim(), link: '#new' })
-
+        // const nextId = sheets.value.length ? Math.max(...sheets.value.map(s => s.id)) + 1 : 1
+        // sheets.value.push({ id: nextId, name: athleteName.value.trim(), link: '#new' })
+        findSheets();
         closeModal()
     } catch (err) {
         // show error and keep modal open
@@ -114,13 +118,19 @@ async function saveNewSheet() {
     }
 }
 
-findSheets();
+// make a listener for user state chang
+onAuthStateChanged(auth, (u) => {
+    loading.value = false;
+    console.log("state change in auth")
+    findSheets();
+});
 </script>
 
 
 <template>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <SignIn v-if="!user" />
+    <Loading v-if="loading" />
+    <SignIn v-else-if="!user" />
     <div v-else>
         <div class="app">
             <header class="navbar">
@@ -193,9 +203,9 @@ findSheets();
                                     </button>
                                 </td>
                             </tr>
-                            <div v-else>
-                                Sheets are loading (or no sheets found)
-                            </div>
+                            <p class="demo" v-else>
+                                No sheets found
+                            </p>
                         </tbody>
                     </table>
                 </section>
@@ -218,8 +228,7 @@ findSheets();
 
                         <div class="modal-actions">
                             <button class="btn ghost" @click="closeModal" :disabled="isSaving">Cancel</button>
-                            <button class="btn primary" disabled="{{ isSaving }}" @click="saveNewSheet"
-                                :disabled="isSaving">
+                            <button class="btn primary" :disabled="isSaving" @click="saveNewSheet">
                                 <span v-if="isSaving" class="spinner" aria-hidden="true"></span>
                                 <span v-if="isSaving">Creating...</span>
                                 <span v-else>Create</span>
