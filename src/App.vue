@@ -59,7 +59,11 @@ async function newSheet(athleteEmail, athleteName) {
 
     if (!response.ok) {
         const text = await response.text().catch(() => '');
+        console.log('Error response text: ' + text);
         throw new Error(`Request failed: ${response.status} ${text}`);
+    } else {
+        const text = await response.text().catch(() => '');
+        console.log('No error response text: ' + text);
     }
 
     const result = await response.json().catch(() => null);
