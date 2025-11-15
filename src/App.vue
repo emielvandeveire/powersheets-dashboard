@@ -46,7 +46,7 @@ async function findSheets() {
 async function newSheet(athleteEmail, athleteName) {
     const url = "https://script.google.com/macros/s/AKfycbwF9QZCKDXY0VFW2Y9N-C0EcBJKIsHN6_27l0PG9zifKJ1ms1_A6FMRh51qphUfFhYIvA/exec";
     const data = {
-        coachEmail: "evdv3d@gmail.com",
+        coachEmail: user.value.email, //"evdv3d@gmail.com",
         athleteEmail: athleteEmail,
         athleteName: athleteName,
     };
