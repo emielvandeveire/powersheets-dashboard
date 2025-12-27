@@ -22,6 +22,14 @@ async function signOutUser() {
 }
 
 async function findSheets() {
+    // avoid running when no user (prevents "cannot read properties of null" crashes)
+    if (!user.value || !user.value.email) {
+        console.warn('findSheets: no user, clearing sheets')
+        sheets.value = []
+        templateSheet.value = null
+        return { sheets: [] }
+    }
+
     const url = "https://script.google.com/macros/s/AKfycbwF9QZCKDXY0VFW2Y9N-C0EcBJKIsHN6_27l0PG9zifKJ1ms1_A6FMRh51qphUfFhYIvA/exec";
     const urlWithParam = `${url}?coachEmail=${encodeURIComponent(user.value.email)}`;
 
@@ -125,8 +133,18 @@ async function saveNewSheet() {
 // make a listener for user state chang
 onAuthStateChanged(auth, (u) => {
     loading.value = false;
-    console.log("state change in auth")
-    findSheets();
+    console.log("state change in auth", u);
+    if (u) {
+        findSheets().catch(err => {
+            console.error('findSheets failed', err);
+            // keep UI stable on errors
+            sheets.value = [];
+            templateSheet.value = null;
+        });
+    } else {
+        sheets.value = [];
+        templateSheet.value = null;
+    }
 });
 </script>
 
@@ -167,18 +185,23 @@ onAuthStateChanged(auth, (u) => {
                 <div class="sheets-wrap">
                     <table class="sheets" aria-label="Demo sheets">
                         <tbody>
-                            <tr>
-                            <td class="name">{{ templateSheet.name }}</td>
-                            <td class="link"><a :href="templateSheet.url" target="_blank" rel="noopener">Open</a></td>
-                            <td class="actions">
-                                <button class="icon" title="Edit sharing" @click.prevent>
-                                    <span class="material-icons">share</span>
-                                </button>
-                                <button class="icon" title="Delete sheet" @click.prevent>
-                                    <span class="material-icons">delete</span>
-                                </button>
-                            </td>
-                        </tr>
+                            <tr v-if="templateSheet">
+                                <td class="name">{{ templateSheet.name }}</td>
+                                <td class="link">
+                                    <a :href="templateSheet.url || '#'" target="_blank" rel="noopener">Open</a>
+                                </td>
+                                <td class="actions">
+                                    <button class="icon" title="Edit sharing" @click.prevent>
+                                        <span class="material-icons">share</span>
+                                    </button>
+                                    <button class="icon" title="Delete sheet" @click.prevent>
+                                        <span class="material-icons">delete</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-else>
+                                <td colspan="3" class="demo">No template sheet</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -194,22 +217,24 @@ onAuthStateChanged(auth, (u) => {
                             </tr>
                         </thead>
                         <tbody>
-
-                            <tr v-if="sheets.length != 0" v-for="sheet in sheets" :key="sheet.id">
-                                <td class="name">{{ sheet.name }}</td>
-                                <td class="link"><a :href="sheet.url" target="_blank" rel="noopener">Open</a></td>
-                                <td class="actions">
-                                    <button class="icon" title="Edit sharing" @click.prevent>
-                                        <span class="material-icons">share</span>
-                                    </button>
-                                    <button class="icon" title="Delete sheet" @click.prevent>
-                                        <span class="material-icons">delete</span>
-                                    </button>
-                                </td>
+                            <tr v-if="sheets.length === 0">
+                                <td colspan="3" class="demo">No sheets found</td>
                             </tr>
-                            <p class="demo" v-else>
-                                No sheets found
-                            </p>
+
+                            <template v-else>
+                                <tr v-for="sheet in sheets" :key="sheet.id">
+                                    <td class="name">{{ sheet.name }}</td>
+                                    <td class="link"><a :href="sheet.url" target="_blank" rel="noopener">Open</a></td>
+                                    <td class="actions">
+                                        <button class="icon" title="Edit sharing" @click.prevent>
+                                            <span class="material-icons">share</span>
+                                        </button>
+                                        <button class="icon" title="Delete sheet" @click.prevent>
+                                            <span class="material-icons">delete</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
                     </table>
                 </section>
