@@ -21,6 +21,8 @@ async function signOutUser() {
     }
 }
 
+const scriptURL = "https://script.google.com/macros/s/AKfycbx4LVTeMIlpBZM-_aFBGKnCWjf90gN4Q73yMYWuABCska3MtPNa0jjDcekG7MC4Xq4mmg/exec";
+
 async function findSheets() {
     // avoid running when no user (prevents "cannot read properties of null" crashes)
     if (!user.value || !user.value.email) {
@@ -30,7 +32,7 @@ async function findSheets() {
         return { sheets: [] }
     }
 
-    const url = "https://script.google.com/macros/s/AKfycbwF9QZCKDXY0VFW2Y9N-C0EcBJKIsHN6_27l0PG9zifKJ1ms1_A6FMRh51qphUfFhYIvA/exec";
+    const url = scriptURL;
     const urlWithParam = `${url}?coachEmail=${encodeURIComponent(user.value.email)}`;
 
     const response = await fetch(urlWithParam);
@@ -52,14 +54,41 @@ async function findSheets() {
 // existing helper (kept for other debug/requests)
 // returns parsed JSON result or throws on error
 async function newSheet(athleteEmail, athleteName) {
-    const url = "https://script.google.com/macros/s/AKfycbwF9QZCKDXY0VFW2Y9N-C0EcBJKIsHN6_27l0PG9zifKJ1ms1_A6FMRh51qphUfFhYIvA/exec";
+    const url = scriptURL;
     const data = {
+        action: "createSheet",
         coachEmail: user.value.email, //"evdv3d@gmail.com",
         athleteEmail: athleteEmail,
         athleteName: athleteName,
     };
 
     const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        console.log('Error response text: ' + text);
+        throw new Error(`Request failed: ${response.status} ${text}`);
+    } else {
+        const text = await response.text().catch(() => '');
+        console.log('No error response text: ' + text);
+    }
+
+    const result = await response.json().catch(() => null);
+    return result;
+}
+
+async function shareSheet(fileId, athleteEmail) {
+    const data = {
+        action: "shareSheet",
+        fileId: fileId,
+        athleteEmail: athleteEmail,
+    };
+
+    const response = await fetch(scriptURL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(data),
@@ -91,14 +120,28 @@ const showModal = ref(false)
 const athleteEmail = ref('')
 const athleteName = ref('')
 
+const showShareModal = ref(false)
+const shareEmail = ref('')
+const shareSheetId = ref(null);
+
 function openModal() {
     athleteEmail.value = ''
     athleteName.value = ''
     showModal.value = true
 }
 
+function openShareModal(sheetId) {
+    showShareModal.value = false
+    shareEmail.value = ''
+    showShareModal.value = true
+    shareSheetId.value = sheetId;
+}
+
 function closeModal() {
     showModal.value = false
+}
+function closeShareModal() {
+    showShareModal.value = false
 }
 
 const isSaving = ref(false)
@@ -125,6 +168,27 @@ async function saveNewSheet() {
     } catch (err) {
         // show error and keep modal open
         alert('Failed to create sheet: ' + (err && err.message ? err.message : err))
+    } finally {
+        isSaving.value = false
+    }
+}
+
+async function shareExistingSheet() {
+    // simple validation
+    if (!shareEmail.value.trim()) {
+        alert('Please fill the email field')
+        return
+    }
+
+    if (isSaving.value) return
+
+    isSaving.value = true
+    try {
+        await shareSheet(shareSheetId.value, shareEmail.value)
+        closeShareModal()
+    } catch (err) {
+        // show error and keep modal open
+        alert('Failed to share sheet: ' + (err && err.message ? err.message : err))
     } finally {
         isSaving.value = false
     }
@@ -191,7 +255,7 @@ onAuthStateChanged(auth, (u) => {
                                     <a :href="templateSheet.url || '#'" target="_blank" rel="noopener">Open</a>
                                 </td>
                                 <td class="actions">
-                                    <button class="icon" title="Edit sharing" @click.prevent>
+                                    <button class="icon" title="Edit sharing" @click="openShareModal">
                                         <span class="material-icons">share</span>
                                     </button>
                                     <button class="icon" title="Delete sheet" @click.prevent>
@@ -226,7 +290,7 @@ onAuthStateChanged(auth, (u) => {
                                     <td class="name">{{ sheet.name }}</td>
                                     <td class="link"><a :href="sheet.url" target="_blank" rel="noopener">Open</a></td>
                                     <td class="actions">
-                                        <button class="icon" title="Edit sharing" @click.prevent>
+                                        <button class="icon" title="Edit sharing" @click="openShareModal(sheet.id)">
                                             <span class="material-icons">share</span>
                                         </button>
                                         <button class="icon" title="Delete sheet" @click.prevent>
@@ -261,6 +325,28 @@ onAuthStateChanged(auth, (u) => {
                                 <span v-if="isSaving" class="spinner" aria-hidden="true"></span>
                                 <span v-if="isSaving">Creating...</span>
                                 <span v-else>Create</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="showShareModal" class="modal-overlay" role="dialog" aria-modal="true">
+                    <div class="modal">
+                        <h2>Share Sheet</h2>
+                        <p class="modal-sub">Share the sheet with an athlete</p>
+
+                        <label class="field">
+                            <div class="field-label">Athlete email</div>
+                            <input type="email" v-model="shareEmail" placeholder="athlete@example.com"
+                                :disabled="isSaving" />
+                        </label>
+
+                        <div class="modal-actions">
+                            <button class="btn ghost" @click="closeShareModal" :disabled="isSaving">Cancel</button>
+                            <button class="btn primary" :disabled="isSaving" @click="shareExistingSheet">
+                                <span v-if="isSaving" class="spinner" aria-hidden="true"></span>
+                                <span v-if="isSaving">Sharing...</span>
+                                <span v-else>Share</span>
                             </button>
                         </div>
                     </div>
