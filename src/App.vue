@@ -6,6 +6,9 @@ import { signOut, onAuthStateChanged } from 'firebase/auth'
 import { auth } from './firebaseConfig'
 import Loading from './Loading.vue'
 
+// import the firestoreService.js and try running findSheets() to see if it correctly fetches and logs the sheets for the authenticated user. Make sure to handle any errors that may occur during the fetch operation and log them to the console for debugging purposes.
+import { getUsers, addAthlete } from './firestoreService'
+
 const { user } = useAuth();
 
 const loading = ref(true);
@@ -21,7 +24,7 @@ async function signOutUser() {
     }
 }
 
-const scriptURL = "https://script.google.com/macros/s/AKfycbx4LVTeMIlpBZM-_aFBGKnCWjf90gN4Q73yMYWuABCska3MtPNa0jjDcekG7MC4Xq4mmg/exec";
+const scriptURL = "https://script.google.com/macros/s/AKfycbxzJ_UiAKq82BhRNtoEJ3ubJvWKd_mHACKqOGejlnZqjbgfR3oPjcGFbhVT9lKZgdDk/exec";
 
 async function findSheets() {
     // avoid running when no user (prevents "cannot read properties of null" crashes)
@@ -55,9 +58,11 @@ async function findSheets() {
 // returns parsed JSON result or throws on error
 async function newSheet(athleteEmail, athleteName) {
     const url = scriptURL;
+    const coachEmail = user.value.email; // Store this for clarity
+
     const data = {
         action: "createSheet",
-        coachEmail: user.value.email, //"evdv3d@gmail.com",
+        coachEmail: coachEmail,
         athleteEmail: athleteEmail,
         athleteName: athleteName,
     };
@@ -70,14 +75,23 @@ async function newSheet(athleteEmail, athleteName) {
 
     if (!response.ok) {
         const text = await response.text().catch(() => '');
-        console.log('Error response text: ' + text);
         throw new Error(`Request failed: ${response.status} ${text}`);
-    } else {
-        const text = await response.text().catch(() => '');
-        console.log('No error response text: ' + text);
     }
 
-    const result = await response.json().catch(() => null);
+    // FIX: Only read the body once as JSON
+    const result = await response.json();
+    console.log("Sheet Created:", result);
+
+    // MODIFICATION: Link the data in Firestore
+    // We await this so the UI doesn't update until the link is safe in the DB.
+    // Ensure your App Script returns the ID as 'spreadsheetId' or 'id'. 
+    // Check your App Script output if 'result.spreadsheetId' is undefined.
+    if (result && result.spreadsheetId) {
+        await addAthlete(coachEmail, result.spreadsheetId, athleteEmail);
+    } else {
+        console.warn("Sheet created, but no spreadsheetId returned from Script. Database link skipped.");
+    }
+
     return result;
 }
 
@@ -107,6 +121,32 @@ async function shareSheet(fileId, athleteEmail) {
     return result;
 }
 
+async function deleteSheet(fileId) {
+    const data = {
+        action: "deleteSheet",
+        fileId: fileId,
+    };
+
+    const response = await fetch(scriptURL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        console.log('Error response text: ' + text);
+        throw new Error(`Request failed: ${response.status} ${text}`);
+    } else {
+        const text = await response.text().catch(() => '');
+        console.log('No error response text: ' + text);
+    }
+
+    const result = await response.json().catch(() => null);
+    console.log("Delete result:", result);
+    return result;
+}
+
 const templateSheet = ref(null);
 
 const sheets = ref([
@@ -124,6 +164,9 @@ const showShareModal = ref(false)
 const shareEmail = ref('')
 const shareSheetId = ref(null);
 
+const showDeleteModal = ref(false)
+const deleteSheetId = ref(null);
+
 function openModal() {
     athleteEmail.value = ''
     athleteName.value = ''
@@ -137,11 +180,21 @@ function openShareModal(sheetId) {
     shareSheetId.value = sheetId;
 }
 
+function openDeleteModal(sheetId) {
+    showDeleteModal.value = false
+    deleteSheetId.value = sheetId;
+    showDeleteModal.value = true
+}
+
 function closeModal() {
     showModal.value = false
 }
 function closeShareModal() {
     showShareModal.value = false
+}
+
+function closeDeleteModal() {
+    showDeleteModal.value = false
 }
 
 const isSaving = ref(false)
@@ -194,6 +247,21 @@ async function shareExistingSheet() {
     }
 }
 
+async function deleteExistingSheet() {
+    if (isSaving.value) return
+
+    isSaving.value = true
+    try {
+        await deleteSheet(deleteSheetId.value)
+
+        closeDeleteModal()
+    } catch (err) {
+        alert('Failed to delete sheet: ' + (err && err.message ? err.message : err))
+    } finally {
+        isSaving.value = false
+    }
+}
+
 // make a listener for user state chang
 onAuthStateChanged(auth, (u) => {
     loading.value = false;
@@ -218,6 +286,7 @@ onAuthStateChanged(auth, (u) => {
     <Loading v-if="loading" />
     <SignIn v-else-if="!user" />
     <div v-else>
+        <!-- <button v-on:click="getUsers">Press me</button> -->
         <div class="app">
             <header class="navbar">
                 <!-- <div class="logo">PowerSheets</div> -->
@@ -255,12 +324,12 @@ onAuthStateChanged(auth, (u) => {
                                     <a :href="templateSheet.url || '#'" target="_blank" rel="noopener">Open</a>
                                 </td>
                                 <td class="actions">
-                                    <button class="icon" title="Edit sharing" @click="openShareModal">
+                                    <button class="icon" title="Edit sharing" @click="openShareModal(templateSheet.id)">
                                         <span class="material-icons">share</span>
                                     </button>
-                                    <button class="icon" title="Delete sheet" @click.prevent>
+                                    <!-- <button class="icon" title="Delete sheet" @click="openDeleteModal">
                                         <span class="material-icons">delete</span>
-                                    </button>
+                                    </button> -->
                                 </td>
                             </tr>
                             <tr v-else>
@@ -293,7 +362,7 @@ onAuthStateChanged(auth, (u) => {
                                         <button class="icon" title="Edit sharing" @click="openShareModal(sheet.id)">
                                             <span class="material-icons">share</span>
                                         </button>
-                                        <button class="icon" title="Delete sheet" @click.prevent>
+                                        <button class="icon" title="Delete sheet" @click="openDeleteModal(sheet.id)">
                                             <span class="material-icons">delete</span>
                                         </button>
                                     </td>
@@ -347,6 +416,22 @@ onAuthStateChanged(auth, (u) => {
                                 <span v-if="isSaving" class="spinner" aria-hidden="true"></span>
                                 <span v-if="isSaving">Sharing...</span>
                                 <span v-else>Share</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="showDeleteModal" class="modal-overlay" role="dialog" aria-modal="true">
+                    <div class="modal">
+                        <h2>Delete Sheet</h2>
+                        <p class="modal-sub">Are you sure you want to delete this sheet?</p>
+
+                        <div class="modal-actions">
+                            <button class="btn ghost" @click="closeDeleteModal" :disabled="isSaving">Cancel</button>
+                            <button class="btn primary" :disabled="isSaving" @click="deleteExistingSheet">
+                                <span v-if="isSaving" class="spinner" aria-hidden="true"></span>
+                                <span v-if="isSaving">Deleting...</span>
+                                <span v-else>Delete</span>
                             </button>
                         </div>
                     </div>
